@@ -16,7 +16,7 @@ x3=appendix[,5]
 #one-dimension function f
 f=function(Theta,X){
   #Theta=(theta,...theta4)
-  #X=(x1,x2,x3)此处为一个观测
+  #X=(x1,x2,x3)is an observation
   f=Theta[1]*X[1]+Theta[2]*X[2]+Theta[4]*exp(Theta[3]*X[3])
   return(f)
 }
@@ -31,25 +31,24 @@ fvector=function(Theta,data){
 
 #data generation fucntion
 dataform=function(Theta,sigma,m=30){
-  #m表示生成样本量,这里默认为30
+  #m is sample size
   data=data.frame(y=c(1:30),x1=x1,x2=x2,x3=x3,e=c(1:30),f=c(1:30),f1=c(1:30))
-  #e记录生成残差，F记录真实函数值
+  #e is random distrubance term, F records the real function value 
   for(i in 1:30){
-    data[i,5]=rnorm(1,0,sigma)#sigma是标准差
+    data[i,5]=rnorm(1,0,sigma)#sigma is sd
     data[i,6]=f(Theta,data[i,2:4])
     data[i,7]=data[i,6]+runif(1,-0.005,0.005)
     data[i,1]=data[i,6]+data[i,5]
   }
-  return(data)#结果为data.frame的形式
-  #因为后面需要用到真实e，这里记录在data的第五行
+  return(data)
 }
 
 #give the relevant variable calculation function in the paper
 #n-dimension function delta
 delta=function(Theta,Theta0,data){
-  #Theta=(theta1,...theta4)#真实参数
-  #Theta0=(theta10,...,theta40)#一部分是原假设给出的参数,一部分是给定H0是根据LSE估计得到的
-  #data此处为观测矩阵，每一行表示一个观测(包括因变量y和真实残差e)
+  #Theta is the real parameter value
+  #Part of Theta0 given by the null hypothesis, part of which is estimated according to LSE under H0. 
+  #data is observation matrix，each row represents an observation (including the dependent variable y and the true residual e)
   delta=c(1:30)
   for(i in 1:30){
     delta[i]=data[i,6]-f(Theta0,data[i,2:4])[[1]]
@@ -59,7 +58,7 @@ delta=function(Theta,Theta0,data){
 
 #derivation function of f 
 Fform=function(Theta,data){
-  #Theta可以带估计值，也可以带参数真值
+  #Theta may nor be the real parameter value
   F=matrix(0,nrow=30,ncol=4)
   for(i in 1:30){
     F[i,1]=data$x1[i]
@@ -72,10 +71,9 @@ Fform=function(Theta,data){
 
 #Test statistics X
 Xstat=function(data,delta,P1,P){
-  #e为生成数据时的真实残差
-  #delta使用真实参数+H0成立时得到的估计参数计算
-  #P1使用真实参数
-  #P使用真实参数
+  #e is the real disturbance value
+  #delta is calculated by true parameter value Theta and Theta0 
+  #both P and P1 are caltulated by true parameter value
   e=data$e
   Xstat=t(e+delta)%*%(diag(30)-P1)%*%(e+delta)/(t(e)%*%(diag(30)-P)%*%e)
   return(Xstat)
@@ -100,13 +98,13 @@ c2=qf(0.95,1,26)#Wald
 
 Test1=function(N,Theta){
   
-  #Theta表示真实参数值
+  #Theta is the true parameter value
   M1=data.frame(X1=matrix(0,nrow=N,ncol=1),T1=matrix(0,nrow=N,ncol=1),lambda1=matrix(0,nrow=N,ncol=1),lambda2=matrix(0,nrow=N,ncol=1))
   W1=data.frame(Y1=matrix(0,nrow=N,ncol=1),S1=matrix(0,nrow=N,ncol=1),lambda=matrix(0,nrow=N,ncol=1),indicator=matrix(0,nrow=N,ncol=1))
   for(i in 1:N){
     data=dataform(Theta,sigma,m=30)
     
-    #估计无任何限制情形的最小二乘估计Thetah
+    #Thetah is the unconstrained LSE
     out=try(nls(y~a*x1+b*x2+d*exp(c*x3),data,start=list(a=0,b=0,c=-1,d=-1)),silent=TRUE)
     if(is(out,"try-error")) {
       M1$X1[i]=NA
@@ -114,26 +112,28 @@ Test1=function(N,Theta){
       coef=summary(out)$coefficients
       Thetah=coef[,1]
       
-      #估计有H0限制情形的部分最小二乘估计Thetat
+      #Thetat is the LSE under the constrained of H0
       out=try(nls(y~b*x2+d*exp(c*x3),data,start=list(b=0,c=-1,d=-1)),silent=TRUE)
       if(is(out,"try-error")) {
         M1$X1[i]=NA
       } else{
         coef=summary(out)$coefficients
-        Thetat=c(0,coef[,1])#包含H0和估计值
+        Thetat=c(0,coef[,1])#contain parameter value from H0 and constrained LSE
         
-        #在H0条件下，估计与真实函数值差距最小的其余参数值Theta0
+        #part of Theta0 is the parameter value from H0, part of Theta0 is LSE of true function value and estimated function value
         out=try(nls(f1~b*x2+d*exp(c*x3),data,start=list(b=0,c=-1,d=-1)),silent=TRUE)
-        #这里的f1与f之间相差很小,仅差(-0.005,0.005)上的一个均匀随机数，nls要求数据源必须有误差，因为不能用真实值f
+        #the difference between f1 and f is very small, only a uniform random difference from U(-0.005,0.005)
+        #because nls requires the data source to have an error, otherwise the real value f canno be used.
+        
         if(is(out,"try-error")) {
           Theta0=Thetat#
           W1$indicator=1
         } else{
           coef=summary(out)$coefficients
-          Theta0=c(0,coef[,1])#包含H0和估计值
-{
-        #model1:H0:theta1=0
-        #计算X检验统计量的值
+          Theta0=c(0,coef[,1])
+          
+        #model1:Likelihood Ratio Test
+        #Calculate the value of the X test statistic
         F=Fform(Theta,data)
         P=F%*%ginv(t(F)%*%F)%*%t(F)
         delta0=delta(Theta,Theta0,data)
@@ -143,20 +143,20 @@ Test1=function(N,Theta){
         X=Xstat(data,delta0,P1,P)
         M1$X1[i]=X
         
-        #计算T检验统计量的值
+        #Calculate the value of the T test statistic
         sigma2h=(t(data$y-fvector(Thetah,data))%*%(data$y-fvector(Thetah,data)))/30
         sigma2t=(t(data$y-fvector(Thetat,data))%*%(data$y-fvector(Thetat,data)))/30
         T=sigma2t/sigma2h
         M1$T1[i]=T
         
-        #计算参数lambda
+        #Calculate the value of lambda1 and lambda2
         l1=t(delta0)%*%(P-P1)%*%delta0/(2*(sigma^2))
         l2=t(delta0)%*%(diag(30)-P)%*%delta0/(2*(sigma^2))
         M1$lambda1[i]=l1
         M1$lambda2[i]=l2
         
-        #model2:H0:theta1=0
-        #计算S检验统计量的值
+        #model2:H0:Wald Test
+        #Calculate the value of the S test statistic
         Fh=Fform(Thetah,data)
         FFinv=ginv((t(Fh))%*%Fh)
         Ch=FFinv[1,1]
@@ -164,17 +164,16 @@ Test1=function(N,Theta){
         S=(Thetah[1])^2*ginv(Ch)/s2
         W1$S1[i]=S
         
-        #计算Y检验统计量的值
+        #Calculate the value of the Y test statistic
         FFinv=ginv((t(F))%*%F)
         C=FFinv[1,1]
         U2=as.matrix(ginv(t(F)%*%F)%*%t(F)%*%(as.matrix(data$e)))[1]
         Y=(t(U2+Theta[1])%*%ginv(C)%*%(U2+Theta[1]))/(t(data$e)%*%(diag(30)-P)%*%data$e/26)
         W1$Y1[i]=Y
         
-        #计算参数lambda
+        #Calculate the value of lambda
         l=(Theta[1])^2*ginv(C)/(2*sigma^2)
         W1$lambda[i]=l
-}
         }
       }
     }
@@ -233,7 +232,7 @@ Test2=function(N,Theta){
   for(i in 1:N){
     data=dataform(Theta,sigma,m=30)
     
-    #估计无任何限制情形的最小二乘估计Thetah
+    #Thetah is the unconstrained LSE
     out=try(nls(y~a*x1+b*x2+d*exp(c*x3),data,start=c(a=0,b=0,c=-1,d=-1)),silent=TRUE);
     if(is(out,"try-error")) {
       M2$X1[i]=NA
@@ -241,19 +240,19 @@ Test2=function(N,Theta){
       coef=summary(out)$coefficients
       Thetah=coef[,1]
       
-     #估计有H0限制情形的部分最小二乘估计Thetat
+    #Thetat is the LSE under the constrained of H0
      out=lm(y~x2+x1+exp(-x3),data)
      coef=summary(out)$coefficients
      Thetat=c(coef[2,1],coef[1,1],-1,coef[3,1])
     
-     #在H0条件下，估计与真实函数值差距最小的其余参数值Theta0
+     #part of Theta0 is the parameter value from H0, part of Theta0 is LSE of true function value and estimated function value
      out=lm(f1~x2+x1+exp(-x3),data)
      coef=summary(out)$coefficients
-     Theta0=c(coef[2,1],coef[1,1],-1,coef[3,1])#包含H0和估计值
+     Theta0=c(coef[2,1],coef[1,1],-1,coef[3,1])
       
-      #model1:H0:theta3=-1
-      #计算X检验统计量的值
-      F=Fform(Theta,data)#使用真实值计算F和P
+      #model1:Likelihood Ratio Test
+      #X
+      F=Fform(Theta,data)
       P=F%*%ginv(t(F)%*%F)%*%t(F)
       delta0=delta(Theta,Theta0,data)
       F1=matrix(0,nrow=30,ncol=3)
@@ -262,35 +261,35 @@ Test2=function(N,Theta){
       X=Xstat(data,delta0,P1,P)
       M2$X1[i]=X
       
-      #计算T检验统计量的值
+      #T
       sigma2h=(t(data$y-fvector(Thetah,data))%*%(data$y-fvector(Thetah,data)))/30
       sigma2t=(t(data$y-fvector(Thetat,data))%*%(data$y-fvector(Thetat,data)))/30
       T=sigma2t/sigma2h
       M2$T1[i]=T
       
-      #计算参数lambda
+      #lambda1 and lambda2
       l1=t(delta0)%*%(P-P1)%*%delta0/(2*(sigma^2))
       l2=t(delta0)%*%(diag(30)-P)%*%delta0/(2*(sigma^2))
       M2$lambda1[i]=l1
       M2$lambda2[i]=l2
       
-      #model2:H0:theta3=-1
-      #计算S检验统计量的值
-      Fh=Fform(Thetah,data)#使用无限制情形的估计值计算F和C
+      #model2:Wald Test
+      #S
+      Fh=Fform(Thetah,data)
       FFinv=ginv((t(Fh))%*%Fh)
       Ch=FFinv[3,3]
       s2=(t(data$y-fvector(Thetah,data))%*%(data$y-fvector(Thetah,data)))/26
       S=(Thetah[3]+1)^2*ginv(Ch)/s2
       W2$S1[i]=S
       
-      #计算Y检验统计量的值
-      FFinv=ginv((t(F))%*%F)#使用F的真实值计算C和U2
+      #Y
+      FFinv=ginv((t(F))%*%F)
       C=FFinv[3,3]
       U2=as.matrix(ginv(t(F)%*%F)%*%t(F)%*%(as.matrix(data$e)))[3]
       Y=(t(U2+Theta[3]+1)%*%ginv(C)%*%(U2+Theta[3]+1))/(t(data$e)%*%(diag(30)-P)%*%data$e/26)
       W2$Y1[i]=Y
       
-      #计算参数lambda
+      #lambda
       l=(Theta[3]+1)^2*ginv(C)/(2*sigma^2)
       W2$lambda[i]=l
     }
@@ -318,13 +317,12 @@ c1=1+2*qf(0.95,2,26)/26
 c2=qf(0.95,2,26)
 
 Test3=function(N,Theta){
-  #Theta表示真实参数值
   M3=data.frame(X1=matrix(0,nrow=N,ncol=1),T1=matrix(0,nrow=N,ncol=1),lambda1=matrix(0,nrow=N,ncol=1),lambda2=matrix(0,nrow=N,ncol=1))
   W3=data.frame(Y1=matrix(0,nrow=N,ncol=1),S1=matrix(0,nrow=N,ncol=1),lambda=matrix(0,nrow=N,ncol=1))
   for(i in 1:N){
     data=dataform(Theta,sigma,m=30)
     
-    #估计无任何限制情形的最小二乘估计Thetah
+    #Thetah is the unconstrained LSE
     out=try(nls(y~a*x1+b*x2+d*exp(c*x3),data,start=c(a=0,b=0,c=-1,d=-1)),silent=TRUE);
     if(is(out,"try-error")) {
       M3$X1[i]=NA
@@ -332,63 +330,60 @@ Test3=function(N,Theta){
       coef=summary(out)$coefficients
       Thetah=coef[,1]
       
-      #估计有H0限制情形的部分最小二乘估计Thetat
+      #Thetat is the LSE under the constrained of H0
       out=lm(y~x2+exp(-x3),data)
       coef=summary(out)$coefficients
       Thetat=c(0,coef[1,1],-1,coef[2,1])
         
-      #在H0条件下，估计与真实函数值差距最小的其余参数值Theta0
+      #part of Theta0 is the parameter value from H0, part of Theta0 is LSE of true function value and estimated function value
       out=lm(f1~x2+exp(-x3),data)
       coef=summary(out)$coefficients
-      Theta0=c(0,coef[1,1],-1,coef[2,1])#包含H0和估计值
+      Theta0=c(0,coef[1,1],-1,coef[2,1])
         
-      #model1:H0:theta3=-1
-      #计算X检验统计量的值
-      F=Fform(Theta,data)#使用真实值计算F和P
+      #model3:Likelihood Ratio Test
+      #X
+      F=Fform(Theta,data)
       P=F%*%ginv(t(F)%*%F)%*%t(F)
-      delta0=delta(Theta,Theta0,data)#这里delta0中rho0使用rho-tuta替代的
+      delta0=delta(Theta,Theta0,data)
       F1=matrix(0,nrow=30,ncol=2)
       F1[,1]=F[,2];F1[,2]=F[,4]
       P1=F1%*%ginv(t(F1)%*%F1)%*%t(F1)
       X=Xstat(data,delta0,P1,P)
       M3$X1[i]=X
       
-      #计算T检验统计量的值
+      #T
       sigma2h=(t(data$y-fvector(Thetah,data))%*%(data$y-fvector(Thetah,data)))/30
       sigma2t=(t(data$y-fvector(Thetat,data))%*%(data$y-fvector(Thetat,data)))/30
       T=sigma2t/sigma2h
       M3$T1[i]=T
       
-      #计算参数lambda
+      #lambda1 and lambda2
       l1=t(delta0)%*%(P-P1)%*%delta0/(2*(sigma^2))
       l2=t(delta0)%*%(diag(30)-P)%*%delta0/(2*(sigma^2))
       M3$lambda1[i]=l1
       M3$lambda2[i]=l2 
       
-      #model2:H0:theta3=-1
-      #计算S检验统计量的值
-      Fh=Fform(Thetah,data)#使用无限制情形的估计值计算F和C
+      #model3:Wald Test
+      #S
+      Fh=Fform(Thetah,data)
       FFinv=ginv((t(Fh))%*%Fh)
       Ch=matrix(0,nrow=2,ncol=2)
       Ch[1,1]=FFinv[1,1];Ch[1,2]=FFinv[1,3];
       Ch[2,2]=FFinv[3,3];Ch[2,1]=FFinv[3,1];
       s2=(t(data$y-fvector(Thetah,data))%*%(data$y-fvector(Thetah,data)))/26
-      #需要更改
       S=t(as.matrix(Thetah)[c(1,3),1]-c(0,-1))%*%ginv(Ch)%*%t(t(as.matrix(Thetah)[c(1,3),1])-c(0,-1))/s2/2
       W3$S1[i]=S
       
-      #计算Y检验统计量的值
-      FFinv=ginv((t(F))%*%F)#使用F的真实值计算C和U2
+      #Y
+      FFinv=ginv((t(F))%*%F)
       C=matrix(0,nrow=2,ncol=2)
       C[1,1]=FFinv[1,1];C[1,2]=FFinv[1,3];
       C[2,2]=FFinv[3,3];C[2,1]=FFinv[3,1];
       U2=as.matrix(ginv(t(F)%*%F)%*%t(F)%*%(as.matrix(data$e)))[c(1,3),1]
-      #需要更改
       Y=(t(U2+as.matrix(Theta)[c(1,3),1]-c(0,-1))%*%ginv(C)%*%(U2+as.matrix(Theta)[c(1,3),1]-c(0,-1)))/2/(t(data$e)%*%(diag(30)-P)%*%data$e/26)
       W3$Y1[i]=Y
       
-      #计算参数lambda
-      #需要更改
+      #lambda
       l=t(as.matrix(Theta)[c(1,3),1]-c(0,-1))%*%ginv(C)%*%(as.matrix(Theta)[c(1,3),1]-c(0,-1))/(2*sigma^2)
       W3$lambda[i]=l
     }
@@ -406,3 +401,5 @@ whethermissing(D3,3)
 #obtain the indicative function value based on the p-value 
 D3=indicator(D3,c1,c2)
 apply(D3,2,mean)
+
+
